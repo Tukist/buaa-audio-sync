@@ -19,8 +19,20 @@
 
 ## 安装
 
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
-2. [点击安装脚本](https://github.com/Tukist/buaa-audio-sync/raw/master/buaa-audio-sync.user.js)
+安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
+
+**建议**
+![alt text](image.png)
+
+![alt text](image-1.png)
+
+![alt text](image-2.png)
+
+然后直接把js文件里面内容复制粘贴上去
+
+或者
+
+ [点击安装脚本](https://github.com/Tukist/buaa-audio-sync/raw/master/buaa-audio-sync.user.js)
 
 或手动：Tampermonkey → 管理面板 → 实用工具 → 导入 → 选择 `buaa-audio-sync.user.js`
 
