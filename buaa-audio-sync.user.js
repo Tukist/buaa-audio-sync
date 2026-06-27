@@ -77,8 +77,9 @@
         cloneVideo.addEventListener('loadedmetadata', doSync);
         cloneVideo.addEventListener('canplay', doSync);
         cloneVideo.addEventListener('seeked', () => {
-            if (cloneVideo.paused && !isOnPPT && teacherVideo && !teacherVideo.paused) {
-                cloneVideo.play().catch(() => {});
+            // 如果不在 PPT 视图且教师没暂停，取消静音
+            if (!isOnPPT && teacherVideo && !teacherVideo.paused && cloneVideo.muted) {
+                cloneVideo.muted = false;
             }
         });
 
@@ -115,46 +116,42 @@
     }
 
     // ===== 时间+状态同步 =====
+    // ★ 用静音代替暂停/播放，避免 HLS 状态机在后台抖动
     function startTimeSync() {
         if (syncInterval) clearInterval(syncInterval);
         syncInterval = setInterval(() => {
             if (!cloneVideo) return;
 
-            // 始终同步：音量、静音状态（不管是不是 PPT 视图）
-            // 找一个活跃的 video 来读取状态
             const activeVideo = teacherVideo || document.querySelector('video:not([data-buaa-clone])');
-            if (activeVideo) {
-                if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
-                    cloneVideo.volume = activeVideo.volume;
-                }
-                if (cloneVideo.muted !== activeVideo.muted) {
-                    cloneVideo.muted = activeVideo.muted;
-                }
+            if (!activeVideo) return;
+
+            // 同步音量（但不同步静音状态，因为用静音模拟暂停）
+            if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
+                cloneVideo.volume = activeVideo.volume;
             }
 
-            // PPT 视图：只同步暂停/播放（用户可控制）
-            if (isOnPPT && activeVideo) {
-                if (activeVideo.paused && !cloneVideo.paused) {
-                    cloneVideo.pause();
-                } else if (!activeVideo.paused && cloneVideo.paused) {
-                    cloneVideo.play().catch(() => {});
-                }
-                return; // PPT 视图不同步时间
+            // ★ 用静音代替暂停
+            if (activeVideo.paused) {
+                if (!cloneVideo.muted) cloneVideo.muted = true;  // 静音 = 暂停
+                return;
+            }
+
+            // 以下：活跃视频在播放中
+
+            // PPT 视图：取消静音即可，不同步时间
+            if (isOnPPT) {
+                if (cloneVideo.muted) cloneVideo.muted = false;
+                return;
             }
 
             // 教师视图：完整同步
             if (!teacherVideo || !document.contains(teacherVideo)) return;
-            if (!teacherVideo.paused && teacherVideo.currentTime > 0) {
+            if (cloneVideo.muted) cloneVideo.muted = false;
+            if (teacherVideo.currentTime > 0) {
                 const diff = Math.abs(cloneVideo.currentTime - teacherVideo.currentTime);
                 if (diff > 0.5 && teacherVideo.readyState >= 2) {
                     cloneVideo.currentTime = teacherVideo.currentTime;
                 }
-            }
-            // 暂停/播放同步
-            if (teacherVideo.paused && !cloneVideo.paused) {
-                cloneVideo.pause();
-            } else if (!teacherVideo.paused && cloneVideo.paused) {
-                cloneVideo.play().catch(() => {});
             }
         }, 300);
     }
@@ -171,19 +168,17 @@
                     if (isPPTSrc(curSrc) && !isOnPPT) {
                         log('📺 → PPT 视图');
                         isOnPPT = true;
-                        if (cloneVideo && cloneVideo.paused) cloneVideo.play().catch(() => {});
-                        // 同步当前进度
+                        if (cloneVideo && cloneVideo.muted) cloneVideo.muted = false;
                         if (cloneVideo && video.currentTime > 0) {
                             cloneVideo.currentTime = video.currentTime;
                         }
                     } else if (!isPPTSrc(curSrc) && isOnPPT) {
                         log('📺 → 教师视图');
                         isOnPPT = false;
-                        // 恢复同步
                         if (cloneVideo && teacherVideo && teacherVideo.currentTime > 0) {
                             cloneVideo.currentTime = teacherVideo.currentTime;
-                            if (cloneVideo.paused) cloneVideo.play().catch(() => {});
                         }
+                        if (cloneVideo && cloneVideo.muted) cloneVideo.muted = false;
                     }
                 }
             }
@@ -202,21 +197,22 @@
         video._buaaEventsBound = true;
 
         video.addEventListener('pause', () => {
-            if (cloneVideo && !cloneVideo.paused) {
-                cloneVideo.pause();
+            if (cloneVideo && !cloneVideo.muted) {
+                cloneVideo.muted = true;  // ★ 静音代替暂停
             }
         });
         video.addEventListener('play', () => {
-            if (cloneVideo && cloneVideo.paused) {
-                cloneVideo.play().catch(() => {});
-                // 同步时间
-                if (video.currentTime > 0) cloneVideo.currentTime = video.currentTime;
+            if (cloneVideo && cloneVideo.muted) {
+                cloneVideo.muted = false;
+            }
+            if (cloneVideo && video.currentTime > 0) {
+                cloneVideo.currentTime = video.currentTime;
             }
         });
         video.addEventListener('volumechange', () => {
             if (cloneVideo) {
+                // 只同步音量大小，不同步静音状态（因为我们用静音模拟暂停）
                 cloneVideo.volume = video.volume || 1.0;
-                cloneVideo.muted = video.muted;
             }
         });
         video.addEventListener('seeked', () => {
@@ -230,9 +226,10 @@
     function scanAndSetup() {
         if (!syncEnabled) return;
 
-        // 维护克隆
+        // 维护克隆：始终保持播放状态（静音代替暂停）
         if (cloneVideo && cloneVideo.paused) {
             cloneVideo.play().catch(() => {});
+            cloneVideo.muted = true; // 初始静音，等活跃视频播放时取消
         }
         if (cloneAudioCtx && cloneAudioCtx.state === 'suspended') {
             cloneAudioCtx.resume().catch(() => {});
@@ -269,7 +266,7 @@
         if (!video) return;
         log(`📊 [${label}] src=`, (video.src || '').substring(0, 55));
         log(`   paused=${video.paused} time=${video.currentTime.toFixed(1)} inDOM=${document.contains(video)}`);
-        if (cloneVideo) log(`   🎬 克隆 paused=${cloneVideo.paused} time=${cloneVideo.currentTime.toFixed(1)}`);
+        if (cloneVideo) log(`   🎬 克隆 muted=${cloneVideo.muted} time=${cloneVideo.currentTime.toFixed(1)}`);
         log(`   isOnPPT=${isOnPPT}`);
     }
 
@@ -303,7 +300,7 @@
             </style>
             <div class="dot"></div>
             <div class="text">
-                <div class="label">🎵 音源同步 v6</div>
+                <div class="label">🎵 音源同步 v7</div>
                 <div class="hint">点击切换</div>
             </div>
         `;
@@ -325,11 +322,11 @@
             panelEl.classList.add('off');
             labelEl.textContent = '🔇 已暂停';
             hintEl.textContent = '点击恢复';
-        } else if (isOnPPT && cloneVideo && !cloneVideo.paused) {
+        } else if (isOnPPT && cloneVideo && !cloneVideo.muted) {
             panelEl.classList.add('ppt');
             labelEl.textContent = '🎵 PPT视图';
             hintEl.textContent = '暂停/音量可控';
-        } else if (cloneVideo && !cloneVideo.paused) {
+        } else if (cloneVideo && !cloneVideo.muted) {
             labelEl.textContent = '🎵 音源同步';
             hintEl.textContent = '暂停/音量同步';
         } else {
@@ -375,7 +372,7 @@
 
     // ===== 初始化 =====
     function init() {
-        log('═══ 智学北航 PPT音源同步 v6.1 ═══');
+        log('═══ 智学北航 PPT音源同步 v7.0 ═══');
         const tryCreatePanel = () => {
             if (document.body) { createPanel(); updatePanel(); }
             else setTimeout(tryCreatePanel, 500);
