@@ -171,7 +171,7 @@
                     if (isPPTSrc(curSrc) && !isOnPPT) {
                         log('📺 → PPT 视图');
                         isOnPPT = true;
-                        if (cloneVideo && cloneVideo.paused) cloneVideo.play().catch(() => {});
+                        if (cloneVideo && cloneVideo.paused && !video.paused) cloneVideo.play().catch(() => {});
                         // 同步当前进度
                         if (cloneVideo && video.currentTime > 0) {
                             cloneVideo.currentTime = video.currentTime;
@@ -182,7 +182,7 @@
                         // 恢复同步
                         if (cloneVideo && teacherVideo && teacherVideo.currentTime > 0) {
                             cloneVideo.currentTime = teacherVideo.currentTime;
-                            if (cloneVideo.paused) cloneVideo.play().catch(() => {});
+                            if (cloneVideo.paused && !teacherVideo.paused) cloneVideo.play().catch(() => {});
                         }
                     }
                 }
@@ -230,8 +230,8 @@
     function scanAndSetup() {
         if (!syncEnabled) return;
 
-        // 维护克隆
-        if (cloneVideo && cloneVideo.paused) {
+        // 仅在教师视频仍在播放时，才恢复意外暂停的克隆
+        if (cloneVideo && cloneVideo.paused && teacherVideo && !teacherVideo.paused) {
             cloneVideo.play().catch(() => {});
         }
         if (cloneAudioCtx && cloneAudioCtx.state === 'suspended') {
