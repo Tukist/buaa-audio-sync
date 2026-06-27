@@ -129,6 +129,10 @@
             if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
                 cloneVideo.volume = activeVideo.volume;
             }
+            // 同步倍速
+            if (cloneVideo.playbackRate !== activeVideo.playbackRate) {
+                cloneVideo.playbackRate = activeVideo.playbackRate;
+            }
 
             // ★ 用静音代替暂停
             if (activeVideo.paused) {
@@ -211,8 +215,12 @@
         });
         video.addEventListener('volumechange', () => {
             if (cloneVideo) {
-                // 只同步音量大小，不同步静音状态（因为我们用静音模拟暂停）
                 cloneVideo.volume = video.volume || 1.0;
+            }
+        });
+        video.addEventListener('ratechange', () => {
+            if (cloneVideo) {
+                cloneVideo.playbackRate = video.playbackRate;
             }
         });
         video.addEventListener('seeked', () => {
@@ -372,7 +380,7 @@
 
     // ===== 初始化 =====
     function init() {
-        log('═══ 智学北航 PPT音源同步 v7.0 ═══');
+        log('═══ 智学北航 PPT音源同步 v7.1 ═══');
         const tryCreatePanel = () => {
             if (document.body) { createPanel(); updatePanel(); }
             else setTimeout(tryCreatePanel, 500);
