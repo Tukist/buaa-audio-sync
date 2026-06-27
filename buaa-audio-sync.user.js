@@ -116,30 +116,35 @@
 
     // ===== 时间+状态同步 =====
     function startTimeSync() {
-        if (syncInterval) clearInterval(syncInterval);
+        stopTimeSync(); // 确保没有残留
         syncInterval = setInterval(() => {
             if (!cloneVideo) return;
 
-            // 始终同步：音量、静音状态（不管是不是 PPT 视图）
-            // 找一个活跃的 video 来读取状态
             const activeVideo = teacherVideo || document.querySelector('video:not([data-buaa-clone])');
-            if (activeVideo) {
-                if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
-                    cloneVideo.volume = activeVideo.volume;
-                }
-                if (cloneVideo.muted !== activeVideo.muted) {
-                    cloneVideo.muted = activeVideo.muted;
-                }
+            if (!activeVideo) return;
+
+            // 始终同步音量/静音
+            if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
+                cloneVideo.volume = activeVideo.volume;
+            }
+            if (cloneVideo.muted !== activeVideo.muted) {
+                cloneVideo.muted = activeVideo.muted;
             }
 
-            // PPT 视图：只同步暂停/播放（用户可控制）
-            if (isOnPPT && activeVideo) {
+            // ★ 如果活跃视频暂停了且克隆也暂停了，停掉定时器省资源+防抖动
+            if (activeVideo.paused && cloneVideo.paused) {
+                stopTimeSync();
+                return;
+            }
+
+            // PPT 视图：只同步播放/暂停
+            if (isOnPPT) {
                 if (activeVideo.paused && !cloneVideo.paused) {
                     cloneVideo.pause();
                 } else if (!activeVideo.paused && cloneVideo.paused) {
                     cloneVideo.play().catch(() => {});
                 }
-                return; // PPT 视图不同步时间
+                return;
             }
 
             // 教师视图：完整同步
@@ -150,13 +155,40 @@
                     cloneVideo.currentTime = teacherVideo.currentTime;
                 }
             }
-            // 暂停/播放同步
+            // 暂停/播放兜底
             if (teacherVideo.paused && !cloneVideo.paused) {
                 cloneVideo.pause();
             } else if (!teacherVideo.paused && cloneVideo.paused) {
                 cloneVideo.play().catch(() => {});
             }
         }, 300);
+    }
+
+    function stopTimeSync() {
+        if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    }
+
+    // ★ 全局事件：任意视频播放时重启定时器（处理PPT视图下用户点播放的场景）
+    function setupGlobalPlayListener() {
+        document.addEventListener('play', (e) => {
+            const v = e.target;
+            if (v && v.tagName === 'VIDEO' && !v.hasAttribute('data-buaa-clone')) {
+                if (cloneVideo && cloneVideo.paused) {
+                    cloneVideo.play().catch(() => {});
+                    if (v.currentTime > 0) cloneVideo.currentTime = v.currentTime;
+                }
+                if (!syncInterval) startTimeSync();
+            }
+        }, true); // 捕获阶段，确保收到
+
+        document.addEventListener('pause', (e) => {
+            const v = e.target;
+            if (v && v.tagName === 'VIDEO' && !v.hasAttribute('data-buaa-clone')) {
+                if (cloneVideo && !cloneVideo.paused) {
+                    cloneVideo.pause();
+                }
+            }
+        }, true);
     }
 
     // ===== 监控原始视频 src 变化 =====
@@ -205,13 +237,15 @@
             if (cloneVideo && !cloneVideo.paused) {
                 cloneVideo.pause();
             }
+            stopTimeSync(); // 暂停后停掉定时器，避免后台抖动
         });
         video.addEventListener('play', () => {
             if (cloneVideo && cloneVideo.paused) {
                 cloneVideo.play().catch(() => {});
-                // 同步时间
                 if (video.currentTime > 0) cloneVideo.currentTime = video.currentTime;
             }
+            // 重新启动同步定时器
+            startTimeSync();
         });
         video.addEventListener('volumechange', () => {
             if (cloneVideo) {
@@ -375,12 +409,13 @@
 
     // ===== 初始化 =====
     function init() {
-        log('═══ 智学北航 PPT音源同步 v6.1 ═══');
+        log('═══ 智学北航 PPT音源同步 v6.2 ═══');
         const tryCreatePanel = () => {
             if (document.body) { createPanel(); updatePanel(); }
             else setTimeout(tryCreatePanel, 500);
         };
         tryCreatePanel();
+        setupGlobalPlayListener();
         scanAndSetup();
         setInterval(scanAndSetup, SCAN_INTERVAL);
         startObserver();
