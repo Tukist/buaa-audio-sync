@@ -26,6 +26,7 @@
     let syncInterval = null;
     let isOnPPT = false;
     let srcWatcher = null;        // 保存 observer 引用以便断开
+    let userPaused = false;       // ★ 用户手动暂停标志，防止后台自动唤醒
 
     function log(...args) {
         if (DEBUG) console.log('[🎵]', ...args);
@@ -77,7 +78,7 @@
         cloneVideo.addEventListener('loadedmetadata', doSync);
         cloneVideo.addEventListener('canplay', doSync);
         cloneVideo.addEventListener('seeked', () => {
-            if (cloneVideo.paused && !isOnPPT && teacherVideo && !teacherVideo.paused) {
+            if (!userPaused && cloneVideo.paused && !isOnPPT && teacherVideo && !teacherVideo.paused) {
                 cloneVideo.play().catch(() => {});
             }
         });
@@ -131,10 +132,16 @@
                 cloneVideo.muted = activeVideo.muted;
             }
 
-            // ★ 核心防抖：如果活跃视频暂停了，克隆必须暂停，且绝不做任何 play
+            // ★ 核心防抖：用户暂停后绝不做任何 play
+            if (userPaused) {
+                if (!cloneVideo.paused) cloneVideo.pause();
+                return;
+            }
+
+            // 如果活跃视频暂停了，克隆必须暂停
             if (activeVideo.paused) {
                 if (!cloneVideo.paused) cloneVideo.pause();
-                return; // 暂停状态：只保底，不同步任何东西
+                return;
             }
 
             // 以下是活跃视频在播放的状态
@@ -162,6 +169,7 @@
         document.addEventListener('play', (e) => {
             const v = e.target;
             if (v && v.tagName === 'VIDEO' && !v.hasAttribute('data-buaa-clone')) {
+                userPaused = false;  // ★ 用户点了播放
                 if (cloneVideo && cloneVideo.paused) {
                     cloneVideo.play().catch(() => {});
                     if (v.currentTime > 0) cloneVideo.currentTime = v.currentTime;
@@ -172,6 +180,7 @@
         document.addEventListener('pause', (e) => {
             const v = e.target;
             if (v && v.tagName === 'VIDEO' && !v.hasAttribute('data-buaa-clone')) {
+                userPaused = true;   // ★ 用户点了暂停
                 if (cloneVideo && !cloneVideo.paused) {
                     cloneVideo.pause();
                 }
@@ -191,6 +200,7 @@
                     if (isPPTSrc(curSrc) && !isOnPPT) {
                         log('📺 → PPT 视图');
                         isOnPPT = true;
+                        userPaused = false;  // 切视图时重置暂停标志
                         if (cloneVideo && cloneVideo.paused) cloneVideo.play().catch(() => {});
                         // 同步当前进度
                         if (cloneVideo && video.currentTime > 0) {
@@ -199,6 +209,7 @@
                     } else if (!isPPTSrc(curSrc) && isOnPPT) {
                         log('📺 → 教师视图');
                         isOnPPT = false;
+                        userPaused = false;  // 切视图时重置暂停标志
                         // 恢复同步
                         if (cloneVideo && teacherVideo && teacherVideo.currentTime > 0) {
                             cloneVideo.currentTime = teacherVideo.currentTime;
@@ -222,11 +233,13 @@
         video._buaaEventsBound = true;
 
         video.addEventListener('pause', () => {
+            userPaused = true;
             if (cloneVideo && !cloneVideo.paused) {
                 cloneVideo.pause();
             }
         });
         video.addEventListener('play', () => {
+            userPaused = false;
             if (cloneVideo && cloneVideo.paused) {
                 cloneVideo.play().catch(() => {});
                 if (video.currentTime > 0) cloneVideo.currentTime = video.currentTime;
@@ -328,8 +341,8 @@
         `;
         panelEl.addEventListener('click', () => {
             syncEnabled = !syncEnabled;
-            if (!syncEnabled) { teardownClone(); teacherVideo = null; isOnPPT = false; }
-            else scanAndSetup();
+            if (!syncEnabled) { teardownClone(); teacherVideo = null; isOnPPT = false; userPaused = false; }
+            else { scanAndSetup(); userPaused = false; }
             updatePanel();
         });
         document.body.appendChild(panelEl);
@@ -394,7 +407,7 @@
 
     // ===== 初始化 =====
     function init() {
-        log('═══ 智学北航 PPT音源同步 v6.3 ═══');
+        log('═══ 智学北航 PPT音源同步 v6.4 ═══');
         const tryCreatePanel = () => {
             if (document.body) { createPanel(); updatePanel(); }
             else setTimeout(tryCreatePanel, 500);
