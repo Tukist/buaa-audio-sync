@@ -171,7 +171,7 @@
                     if (isPPTSrc(curSrc) && !isOnPPT) {
                         log('📺 → PPT 视图');
                         isOnPPT = true;
-                        if (cloneVideo && cloneVideo.paused && !video.paused) cloneVideo.play().catch(() => {});
+                        // 播放/暂停交由 startTimeSync 统一处理
                         // 同步当前进度
                         if (cloneVideo && video.currentTime > 0) {
                             cloneVideo.currentTime = video.currentTime;
@@ -182,7 +182,7 @@
                         // 恢复同步
                         if (cloneVideo && teacherVideo && teacherVideo.currentTime > 0) {
                             cloneVideo.currentTime = teacherVideo.currentTime;
-                            if (cloneVideo.paused && !teacherVideo.paused) cloneVideo.play().catch(() => {});
+                            // 播放/暂停交由 startTimeSync 统一处理
                         }
                     }
                 }
