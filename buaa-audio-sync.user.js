@@ -95,6 +95,10 @@
 
         document.body.appendChild(cloneVideo);
         cloneVideo.play().catch(e => log('⚠ 克隆 play 失败:', e.message));
+
+        // 静音原始视频，避免切回教师流时双音（声音始终从克隆输出）
+        originalVideo.muted = true;
+
         log('✅ 克隆已启动');
     }
 
@@ -127,8 +131,9 @@
                 if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
                     cloneVideo.volume = activeVideo.volume;
                 }
-                if (cloneVideo.muted !== activeVideo.muted) {
-                    cloneVideo.muted = activeVideo.muted;
+                // 静音由 volumechange 事件处理（原始视频已强制静音）
+                if (cloneVideo.playbackRate !== activeVideo.playbackRate && activeVideo.playbackRate > 0) {
+                    cloneVideo.playbackRate = activeVideo.playbackRate;
                 }
             }
 
@@ -213,15 +218,28 @@
                 if (video.currentTime > 0) cloneVideo.currentTime = video.currentTime;
             }
         });
+        let handlingVolumeChange = false;
         video.addEventListener('volumechange', () => {
-            if (cloneVideo) {
-                cloneVideo.volume = video.volume || 1.0;
-                cloneVideo.muted = video.muted;
+            if (!cloneVideo || handlingVolumeChange) return;
+            cloneVideo.volume = video.volume || 1.0;
+
+            // 用户静音意图 → 同步到克隆，但原始视频强制保持静音（避免双音）
+            const userWantsMute = video.muted;
+            cloneVideo.muted = userWantsMute;
+            if (!userWantsMute) {
+                handlingVolumeChange = true;
+                video.muted = true;
+                handlingVolumeChange = false;
             }
         });
         video.addEventListener('seeked', () => {
             if (cloneVideo && video.currentTime > 0) {
                 cloneVideo.currentTime = video.currentTime;
+            }
+        });
+        video.addEventListener('ratechange', () => {
+            if (cloneVideo && video.playbackRate > 0) {
+                cloneVideo.playbackRate = video.playbackRate;
             }
         });
     }
