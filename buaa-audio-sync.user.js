@@ -129,11 +129,12 @@
             const activeVideo = teacherVideo || document.querySelector('video:not([data-buaa-clone])');
             if (!activeVideo) return;
 
-            // 同步音量、倍速（不同步静音状态，因为用静音模拟暂停）
+            // 同步音量（但不同步静音状态，因为用静音模拟暂停）
             if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
                 cloneVideo.volume = activeVideo.volume;
             }
-            if (cloneVideo.playbackRate !== activeVideo.playbackRate && activeVideo.playbackRate > 0) {
+            // 同步倍速
+            if (cloneVideo.playbackRate !== activeVideo.playbackRate) {
                 cloneVideo.playbackRate = activeVideo.playbackRate;
             }
 
@@ -220,6 +221,11 @@
             if (cloneVideo) {
                 // 只同步音量大小，不同步静音状态（因为我们用静音模拟暂停）
                 cloneVideo.volume = video.volume || 1.0;
+            }
+        });
+        video.addEventListener('ratechange', () => {
+            if (cloneVideo) {
+                cloneVideo.playbackRate = video.playbackRate;
             }
         });
         video.addEventListener('seeked', () => {
@@ -384,7 +390,7 @@
 
     // ===== 初始化 =====
     function init() {
-        log('═══ 智学北航 PPT音源同步 v7.0 ═══');
+        log('═══ 智学北航 PPT音源同步 v7.1 ═══');
         const tryCreatePanel = () => {
             if (document.body) { createPanel(); updatePanel(); }
             else setTimeout(tryCreatePanel, 500);
