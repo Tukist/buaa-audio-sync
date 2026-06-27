@@ -96,6 +96,10 @@
 
         document.body.appendChild(cloneVideo);
         cloneVideo.play().catch(e => log('⚠ 克隆 play 失败:', e.message));
+
+        // 静音原始视频，防止切回教师流时双音
+        originalVideo.muted = true;
+
         log('✅ 克隆已启动');
     }
 
@@ -215,6 +219,7 @@
         });
         video.addEventListener('volumechange', () => {
             if (cloneVideo) {
+                // 只同步音量大小，不同步静音状态（因为我们用静音模拟暂停）
                 cloneVideo.volume = video.volume || 1.0;
             }
         });
@@ -226,6 +231,11 @@
         video.addEventListener('seeked', () => {
             if (cloneVideo && video.currentTime > 0) {
                 cloneVideo.currentTime = video.currentTime;
+            }
+        });
+        video.addEventListener('ratechange', () => {
+            if (cloneVideo && video.playbackRate > 0) {
+                cloneVideo.playbackRate = video.playbackRate;
             }
         });
     }
