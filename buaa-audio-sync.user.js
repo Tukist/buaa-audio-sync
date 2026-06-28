@@ -133,8 +133,9 @@
             if (cloneVideo.volume !== activeVideo.volume && activeVideo.volume > 0.01) {
                 cloneVideo.volume = activeVideo.volume;
             }
-            // 同步倍速
-            if (cloneVideo.playbackRate !== activeVideo.playbackRate) {
+            // 同步倍速（仅在教师视图同步克隆→跟用户；PPT 视图不同步，保持克隆原有速度）
+            if (!isOnPPT && activeVideo.playbackRate !== 1.0
+                && cloneVideo.playbackRate !== activeVideo.playbackRate) {
                 cloneVideo.playbackRate = activeVideo.playbackRate;
             }
 
@@ -180,6 +181,10 @@
                         if (cloneVideo && video.currentTime > 0) {
                             cloneVideo.currentTime = video.currentTime;
                         }
+                        // 保持倍速：PPT 视频也设为克隆的速度
+                        if (cloneVideo && cloneVideo.playbackRate !== 1.0) {
+                            video.playbackRate = cloneVideo.playbackRate;
+                        }
                     } else if (!isPPTSrc(curSrc) && isOnPPT) {
                         log('📺 → 教师视图');
                         isOnPPT = false;
@@ -187,6 +192,10 @@
                             cloneVideo.currentTime = teacherVideo.currentTime;
                         }
                         if (cloneVideo && cloneVideo.muted) cloneVideo.muted = false;
+                        // 恢复倍速
+                        if (cloneVideo && cloneVideo.playbackRate !== 1.0) {
+                            video.playbackRate = cloneVideo.playbackRate;
+                        }
                     }
                 }
             }
