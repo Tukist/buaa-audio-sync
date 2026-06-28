@@ -174,11 +174,14 @@
     // ★ 音量增强
     function setBoost(delta) {
         volumeBoost = Math.round(Math.max(1.0, Math.min(3.0, volumeBoost + delta)) * 10) / 10;
-        if (gainNode && cloneAudioCtx) {
-            gainNode.gain.setTargetAtTime(volumeBoost, cloneAudioCtx.currentTime, 0.05);
+        if (gainNode) {
+            gainNode.gain.value = volumeBoost;
+        }
+        if (cloneAudioCtx && cloneAudioCtx.state === 'suspended') {
+            cloneAudioCtx.resume();
         }
         updatePanel();
-        log('🔊 音量增强:', volumeBoost.toFixed(1) + 'x');
+        log('🔊 音量增强:', volumeBoost.toFixed(1) + 'x  |  gainNode=', !!gainNode, ' ctx.state=', cloneAudioCtx?.state);
     }
 
     // ===== 监控原始视频 src 变化 =====
