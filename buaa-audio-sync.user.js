@@ -26,6 +26,8 @@
     let syncInterval = null;
     let isOnPPT = false;
     let srcWatcher = null;        // 保存 observer 引用以便断开
+    let gainNode = null;          // ★ 音量增强节点
+    let volumeBoost = 1.0;        // ★ 音量增强倍数（1.0=正常，最大3.0）
 
     function log(...args) {
         if (DEBUG) console.log('[🎵]', ...args);
@@ -83,11 +85,14 @@
             }
         });
 
-        // AudioContext
+        // AudioContext（带音量增强 GainNode）
         try {
             cloneAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
             cloneSource = cloneAudioCtx.createMediaElementSource(cloneVideo);
-            cloneSource.connect(cloneAudioCtx.destination);
+            gainNode = cloneAudioCtx.createGain();
+            gainNode.gain.value = volumeBoost;
+            cloneSource.connect(gainNode);
+            gainNode.connect(cloneAudioCtx.destination);
             if (cloneAudioCtx.state === 'suspended') cloneAudioCtx.resume().catch(() => {});
             log('✅ 克隆 AudioContext state=', cloneAudioCtx.state);
         } catch (e) {
@@ -107,6 +112,7 @@
         if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
         if (srcWatcher) { try { srcWatcher.disconnect(); } catch (e) {} srcWatcher = null; }
         if (cloneSource) { try { cloneSource.disconnect(); } catch (e) {} cloneSource = null; }
+        if (gainNode) { try { gainNode.disconnect(); } catch (e) {} gainNode = null; }
         if (cloneAudioCtx) {
             try { if (cloneAudioCtx.state !== 'closed') cloneAudioCtx.close().catch(() => {}); }
             catch (e) {}
@@ -163,6 +169,16 @@
                 }
             }
         }, 300);
+    }
+
+    // ★ 音量增强
+    function setBoost(delta) {
+        volumeBoost = Math.round(Math.max(1.0, Math.min(3.0, volumeBoost + delta)) * 10) / 10;
+        if (gainNode && cloneAudioCtx) {
+            gainNode.gain.setTargetAtTime(volumeBoost, cloneAudioCtx.currentTime, 0.05);
+        }
+        updatePanel();
+        log('🔊 音量增强:', volumeBoost.toFixed(1) + 'x');
     }
 
     // ===== 监控原始视频 src 变化 =====
@@ -321,7 +337,25 @@
                 <div class="label">🎵 音源同步 v7</div>
                 <div class="hint">点击切换</div>
             </div>
+            <div class="boost" style="display:flex;align-items:center;gap:4px;margin-left:auto;">
+                <button class="boost-btn" data-action="boost-down" style="
+                    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+                    color:#fff;border-radius:6px;width:24px;height:24px;cursor:pointer;
+                    font-size:14px;line-height:1;padding:0;">−</button>
+                <span class="boost-val" style="font-size:11px;min-width:30px;text-align:center;">1.0x</span>
+                <button class="boost-btn" data-action="boost-up" style="
+                    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+                    color:#fff;border-radius:6px;width:24px;height:24px;cursor:pointer;
+                    font-size:14px;line-height:1;padding:0;">+</button>
+            </div>
         `;
+        // boost 按钮点击不触发面板切换
+        panelEl.querySelector('.boost-btn[data-action="boost-up"]').addEventListener('click', (e) => {
+            e.stopPropagation(); setBoost(0.2);
+        });
+        panelEl.querySelector('.boost-btn[data-action="boost-down"]').addEventListener('click', (e) => {
+            e.stopPropagation(); setBoost(-0.2);
+        });
         panelEl.addEventListener('click', () => {
             syncEnabled = !syncEnabled;
             if (!syncEnabled) { teardownClone(); teacherVideo = null; isOnPPT = false; }
@@ -349,9 +383,9 @@
             hintEl.textContent = '暂停/音量同步';
         } else {
             labelEl.textContent = '🎵 音源同步';
-            hintEl.textContent = '等待...';
-        }
-    }
+        // 更新 boost 显示
+        const boostVal = panelEl.querySelector('.boost-val');
+        if (boostVal) boostVal.textContent = volumeBoost.toFixed(1) + 'x';
 
     // ===== DOM 监听 =====
     function startObserver() {
