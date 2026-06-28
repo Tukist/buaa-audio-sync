@@ -224,20 +224,11 @@
             }
         });
         video.addEventListener('ratechange', () => {
-            if (cloneVideo) {
-                cloneVideo.playbackRate = video.playbackRate;
-            }
-        });
-        video.addEventListener('seeked', () => {
-            if (cloneVideo && video.currentTime > 0) {
-                cloneVideo.currentTime = video.currentTime;
-            }
-        });
-        video.addEventListener('ratechange', () => {
             if (cloneVideo && video.playbackRate > 0) {
                 cloneVideo.playbackRate = video.playbackRate;
             }
         });
+        video.addEventListener('seeked', () => {
     }
 
     // ===== 扫描 =====
